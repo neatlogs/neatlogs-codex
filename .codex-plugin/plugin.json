@@ -1,0 +1,17 @@
+{
+  "name": "neatlogs-codex",
+  "version": "0.1.0",
+  "description": "Automatic Neatlogs observability for Codex sessions through lifecycle hooks.",
+  "author": {
+    "name": "Neatlogs"
+  },
+  "interface": {
+    "displayName": "Neatlogs Codex",
+    "shortDescription": "Trace Codex sessions in Neatlogs.",
+    "longDescription": "Capture Codex prompts, tool calls, responses, subagents, and lifecycle events as Neatlogs traces.",
+    "developerName": "Neatlogs",
+    "category": "Developer Tools",
+    "capabilities": ["Observability"],
+    "defaultPrompt": "Help me configure Neatlogs observability for this Codex project."
+  }
+}

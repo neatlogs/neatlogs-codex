@@ -1,0 +1,143 @@
+{
+  "description": "Automatic Neatlogs observability for Codex sessions.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/dist/cli.js\" hook",
+            "commandWindows": "node \"%PLUGIN_ROOT%\\dist\\cli.js\" hook",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/dist/cli.js\" hook",
+            "commandWindows": "node \"%PLUGIN_ROOT%\\dist\\cli.js\" hook",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/dist/cli.js\" hook",
+            "commandWindows": "node \"%PLUGIN_ROOT%\\dist\\cli.js\" hook",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/dist/cli.js\" hook",
+            "commandWindows": "node \"%PLUGIN_ROOT%\\dist\\cli.js\" hook",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/dist/cli.js\" hook",
+            "commandWindows": "node \"%PLUGIN_ROOT%\\dist\\cli.js\" hook",
+            "timeout": 30,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/dist/cli.js\" hook",
+            "commandWindows": "node \"%PLUGIN_ROOT%\\dist\\cli.js\" hook",
+            "timeout": 30,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/dist/cli.js\" hook",
+            "commandWindows": "node \"%PLUGIN_ROOT%\\dist\\cli.js\" hook",
+            "timeout": 30,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/dist/cli.js\" hook",
+            "commandWindows": "node \"%PLUGIN_ROOT%\\dist\\cli.js\" hook",
+            "timeout": 30,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/dist/cli.js\" hook",
+            "commandWindows": "node \"%PLUGIN_ROOT%\\dist\\cli.js\" hook",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/dist/cli.js\" hook",
+            "commandWindows": "node \"%PLUGIN_ROOT%\\dist\\cli.js\" hook",
+            "timeout": 30,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/dist/cli.js\" hook",
+            "commandWindows": "node \"%PLUGIN_ROOT%\\dist\\cli.js\" hook",
+            "timeout": 30,
+            "async": true
+          }
+        ]
+      }
+    ]
+  }
+}

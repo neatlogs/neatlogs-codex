@@ -1,0 +1,69 @@
+{
+  "name": "@neatlogs/codex",
+  "version": "0.1.0",
+  "description": "Neatlogs observability for Codex sessions through lifecycle hooks",
+  "license": "MIT",
+  "author": "Neatlogs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/neatlogs/neatlogs-codex.git"
+  },
+  "homepage": "https://github.com/neatlogs/neatlogs-codex#readme",
+  "bugs": {
+    "url": "https://github.com/neatlogs/neatlogs-codex/issues"
+  },
+  "type": "module",
+  "bin": {
+    "neatlogs-codex": "dist/cli.js"
+  },
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/**",
+    ".codex-plugin/**",
+    "hooks/**",
+    "README.md",
+    "PLAN.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "codex",
+    "neatlogs",
+    "observability",
+    "opentelemetry",
+    "tracing"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "postbuild": "node scripts/postbuild.mjs",
+    "prepack": "npm run typecheck && npm test && npm run build",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "protobufjs": "^7.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.17",
+    "tsup": "^8.4.0",
+    "typescript": "^5.3.3",
+    "vitest": "3.2.6"
+  },
+  "overrides": {
+    "esbuild": "^0.28.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
