@@ -76,9 +76,9 @@ if (report.proposal?.status === 'pending-validation') {
     }
     await verifyIntegrity();
     if (baseline.code !== 0) {
-      report.proposal = { status: 'rejected', reason: 'Captured baseline does not pass in secretless replay' };
+      report.proposal = { status: 'rejected', reason: `Captured baseline does not pass in secretless replay: ${baseline.output.slice(-600)}` };
     } else if (latest.code === 0) {
-      report.proposal = { status: 'rejected', reason: 'Latest captured hooks do not reproduce the candidate regression' };
+      report.proposal = { status: 'rejected', reason: `Latest captured hooks do not reproduce the candidate regression: ${latest.output.slice(-600)}` };
     } else {
       report.baseline.hookLog = baselineFixture;
       report.latest.hookLog = latestFixture;
