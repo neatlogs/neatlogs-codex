@@ -6,3 +6,7 @@ coverage/
 .env.*
 !.env.example
 *.tgz
+compatibility-report.json
+compatibility-proposal.patch
+compatibility-fixtures/
+.compatibility/trusted-probe.mjs

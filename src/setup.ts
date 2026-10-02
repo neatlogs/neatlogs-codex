@@ -102,7 +102,7 @@ function eventHook(event: CodexHookEventName, command: string): MatcherGroup {
     "PreToolUse",
     "SubagentStart",
   ]);
-  const timeout = event === "SessionEnd" ? 3 : synchronous.has(event) ? 5 : 30;
+  const timeout = event === "SessionEnd" || event === "Interrupt" ? 3 : synchronous.has(event) ? 5 : 30;
   return {
     hooks: [
       {
@@ -110,7 +110,7 @@ function eventHook(event: CodexHookEventName, command: string): MatcherGroup {
         command,
         commandWindows,
         timeout,
-        ...(event !== "SessionEnd" && !synchronous.has(event) ? { async: true } : {}),
+        ...(event !== "SessionEnd" && event !== "Interrupt" && !synchronous.has(event) ? { async: true } : {}),
       },
     ],
   };

@@ -10,6 +10,7 @@ export const CODEX_HOOK_EVENTS = [
   "SubagentStart",
   "SubagentStop",
   "Stop",
+  "Interrupt",
 ] as const;
 
 export type CodexHookEventName = (typeof CODEX_HOOK_EVENTS)[number];

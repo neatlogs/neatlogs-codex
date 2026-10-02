@@ -17,4 +17,11 @@ export default defineConfig([
     target: "node18",
     bundle: true,
   },
+  {
+    entry: { "compatibility-probe": "src/compatibility-probe.ts" },
+    format: ["esm"],
+    platform: "node",
+    target: "node18",
+    bundle: true,
+  },
 ]);

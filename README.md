@@ -152,7 +152,7 @@ The generated `dist/` directory is part of the plugin artifact because bundled h
 
 The current runtime:
 
-- maps documented Codex session, turn, tool, permission, compaction, subagent, and stop hooks;
+- maps documented Codex session, turn, tool, permission, compaction, subagent, stop, and interrupt hooks;
 - keeps exactly one trace per main-thread user turn; subagent hook streams never
   become sibling conversation turns;
 - defensively enriches LLM spans from Codex's transcript with per-request input,
@@ -168,7 +168,7 @@ The current runtime:
 
 ## Claude event compatibility
 
-Codex has 11 native hook events. Unsupported Claude event names are not placed in
+Codex has 12 native hook events, including `Interrupt`. Unsupported Claude event names are not placed in
 `hooks.json`; Codex would never emit them. Instead, the runtime maps supported
 equivalents onto the same Neatlogs semantic attributes used by the Claude Code
 package and exports the compatibility result from the package API.

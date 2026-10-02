@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "package": "@openai/codex",
+  "recordedVersion": "0.160.0",
+  "recordedAt": "2026-10-02",
+  "recordedFrom": "npm latest dist-tag and codex exec help",
+  "liveHookCanaryAtRecording": "not run: no CI OpenAI API credential"
+}

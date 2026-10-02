@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+      - run: npm run build
+      - name: Check isolated replay can load the packaged CLI
+        run: node scripts/compatibility/isolation.check.mjs
+      - name: Exercise synthetic candidate through isolated red-green gate
+        env:
+          COMPAT_UNPRIVILEGED: "true"
+        run: node scripts/compatibility/validation.check.mjs
+      - run: npm test
+      - run: node --test scripts/compatibility/monitor.check.mjs
