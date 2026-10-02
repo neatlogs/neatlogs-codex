@@ -2,7 +2,7 @@ import { readFileSync, mkdtempSync, rmSync, mkdirSync, chmodSync } from "node:fs
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:http";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { isCodexHookPayload } from "./codex-events";
 import { hasWorkflowSpanInTraceRequest } from "./trace-shipper";
@@ -95,6 +95,16 @@ export async function probeHookLog(
     }
     return { ok: errors.length === 0, events: [...new Set(events)], errors };
   } finally {
+    if (process.env.COMPAT_UNPRIVILEGED === "true") {
+      // The isolated handler owns mode-0700 session state. Ask that same user
+      // to remove only its sessions; the verifier then removes its own tree.
+      if (!root.startsWith(join(tmpdir(), "neatlogs-codex-probe-"))) {
+        throw new Error("Refusing to clean an unexpected probe directory");
+      }
+      const sessions = join(root, "cli", "sessions");
+      const cleanup = spawnSync("sudo", ["-n", "-u", "nobody", "--", "rm", "-rf", "--", sessions], { stdio: "ignore" });
+      if (cleanup.status !== 0) throw new Error("Could not clean the isolated session state");
+    }
     rmSync(root, { recursive: true, force: true });
   }
 }

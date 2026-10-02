@@ -3,7 +3,7 @@ import { readFileSync as readFileSync2, mkdtempSync, rmSync, mkdirSync, chmodSyn
 import { tmpdir } from "os";
 import { join } from "path";
 import { createServer } from "http";
-import { spawn } from "child_process";
+import { spawn, spawnSync } from "child_process";
 import { fileURLToPath } from "url";
 
 // src/codex-events.ts
@@ -338,6 +338,14 @@ async function probeHookLog(path, cliPath = fileURLToPath(new URL("../dist/cli.j
     }
     return { ok: errors.length === 0, events: [...new Set(events)], errors };
   } finally {
+    if (process.env.COMPAT_UNPRIVILEGED === "true") {
+      if (!root.startsWith(join(tmpdir(), "neatlogs-codex-probe-"))) {
+        throw new Error("Refusing to clean an unexpected probe directory");
+      }
+      const sessions = join(root, "cli", "sessions");
+      const cleanup = spawnSync("sudo", ["-n", "-u", "nobody", "--", "rm", "-rf", "--", sessions], { stdio: "ignore" });
+      if (cleanup.status !== 0) throw new Error("Could not clean the isolated session state");
+    }
     rmSync(root, { recursive: true, force: true });
   }
 }
