@@ -102,8 +102,9 @@ export async function probeHookLog(
         throw new Error("Refusing to clean an unexpected probe directory");
       }
       const sessions = join(root, "cli", "sessions");
-      const cleanup = spawnSync("sudo", ["-n", "-u", "nobody", "--", "rm", "-rf", "--", sessions], { stdio: "ignore" });
-      if (cleanup.status !== 0) throw new Error("Could not clean the isolated session state");
+      const spool = join(root, "cli", "spool");
+      const cleanup = spawnSync("sudo", ["-n", "-u", "nobody", "--", "rm", "-rf", "--", sessions, spool], { stdio: "ignore" });
+      if (cleanup.status !== 0) throw new Error("Could not clean the isolated handler state");
     }
     rmSync(root, { recursive: true, force: true });
   }
