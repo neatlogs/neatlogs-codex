@@ -334,6 +334,20 @@ export function encodeTraceRequest(spans: OtlpSpan[], workflowName?: string): Ui
   return ExportTraceServiceRequest.encode(ExportTraceServiceRequest.fromObject(message)).finish();
 }
 
+export function hasWorkflowSpanInTraceRequest(bytes: Uint8Array): boolean {
+  const decoded = ExportTraceServiceRequest.toObject(ExportTraceServiceRequest.decode(bytes)) as {
+    resourceSpans?: Array<{ scopeSpans?: Array<{ spans?: Array<{ attributes?: Array<{
+      key?: string;
+      value?: { stringValue?: string };
+    }> }> }> }>;
+  };
+  return decoded.resourceSpans?.some((resource) => resource.scopeSpans?.some((scope) =>
+    scope.spans?.some((span) => span.attributes?.some((attribute) =>
+      attribute.key === "neatlogs.span.kind" && attribute.value?.stringValue === "WORKFLOW",
+    )),
+  )) ?? false;
+}
+
 function tracesEndpoint(endpoint: string): string {
   const normalized = endpoint.replace(/\/+$/, "");
   return normalized.endsWith("/v1/traces") ? normalized : `${normalized}/v1/traces`;

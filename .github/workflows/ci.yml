@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+      - run: npm run build
+      - name: Check isolated replay can load the packaged CLI
+        run: |
+          sudo -n -u nobody -- test ! -w "$GITHUB_WORKSPACE"
+          sudo -n -u nobody -- test -r "$GITHUB_WORKSPACE/dist/cli.js"
+          sudo -n -u nobody -- test -r "$GITHUB_WORKSPACE/node_modules/protobufjs/package.json"
+          sudo -n -u nobody -- node "$GITHUB_WORKSPACE/dist/cli.js" --help
+      - run: npm test
+      - run: node --test scripts/compatibility/monitor.check.mjs

@@ -94,7 +94,7 @@ interface HookHandlerDependencies {
 }
 declare function handleHook(rawInput?: string, dependencies?: HookHandlerDependencies): Promise<void>;
 
-declare const CODEX_HOOK_EVENTS: readonly ["SessionStart", "SessionEnd", "UserPromptSubmit", "PreToolUse", "PermissionRequest", "PostToolUse", "PreCompact", "PostCompact", "SubagentStart", "SubagentStop", "Stop"];
+declare const CODEX_HOOK_EVENTS: readonly ["SessionStart", "SessionEnd", "UserPromptSubmit", "PreToolUse", "PermissionRequest", "PostToolUse", "PreCompact", "PostCompact", "SubagentStart", "SubagentStop", "Stop", "Interrupt"];
 type CodexHookEventName = (typeof CODEX_HOOK_EVENTS)[number];
 interface CodexHookPayload {
     session_id: string;

@@ -740,6 +740,18 @@ export function mapHookEvent(
       return { spans, workflowName: workflowName(turn) };
     }
 
+    case "Interrupt": {
+      const turn = ensureTurnState(payload, state, now);
+      const session = readSessionState(payload, state);
+      const spans = rootAndCompletionSpans(payload, config, turn, now, undefined, session);
+      spans[0].attributes = spans[0].attributes.filter(
+        (attribute) => attribute.key !== "neatlogs.workflow.turn_status",
+      );
+      spans[0].attributes.push(attrString("neatlogs.workflow.turn_status", "interrupted")!);
+      state.write(payload.session_id, turnStateKey(turn.turnId), { ...turn, completed: true });
+      return { spans, workflowName: workflowName(turn) };
+    }
+
     case "SessionEnd": {
       const active = activeTurn(state, payload.session_id);
       if (!active) return { spans: [], cleanupSession: true };

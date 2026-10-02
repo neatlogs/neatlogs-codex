@@ -55,7 +55,8 @@ var CODEX_HOOK_EVENTS = [
   "PostCompact",
   "SubagentStart",
   "SubagentStop",
-  "Stop"
+  "Stop",
+  "Interrupt"
 ];
 function isCodexHookPayload(value) {
   if (!value || typeof value !== "object") return false;
@@ -1339,6 +1340,17 @@ function mapHookEvent(payload, config, state, now = Date.now()) {
       state.write(payload.session_id, turnStateKey(turn.turnId), { ...turn, completed: true });
       return { spans, workflowName: workflowName(turn) };
     }
+    case "Interrupt": {
+      const turn = ensureTurnState(payload, state, now);
+      const session = readSessionState(payload, state);
+      const spans = rootAndCompletionSpans(payload, config, turn, now, void 0, session);
+      spans[0].attributes = spans[0].attributes.filter(
+        (attribute) => attribute.key !== "neatlogs.workflow.turn_status"
+      );
+      spans[0].attributes.push(attrString("neatlogs.workflow.turn_status", "interrupted"));
+      state.write(payload.session_id, turnStateKey(turn.turnId), { ...turn, completed: true });
+      return { spans, workflowName: workflowName(turn) };
+    }
     case "SessionEnd": {
       const active = activeTurn(state, payload.session_id);
       if (!active) return { spans: [], cleanupSession: true };
@@ -1657,7 +1669,7 @@ function eventHook(event, command) {
     "PreToolUse",
     "SubagentStart"
   ]);
-  const timeout = event === "SessionEnd" ? 3 : synchronous.has(event) ? 5 : 30;
+  const timeout = event === "SessionEnd" || event === "Interrupt" ? 3 : synchronous.has(event) ? 5 : 30;
   return {
     hooks: [
       {
@@ -1665,7 +1677,7 @@ function eventHook(event, command) {
         command,
         commandWindows,
         timeout,
-        ...event !== "SessionEnd" && !synchronous.has(event) ? { async: true } : {}
+        ...event !== "SessionEnd" && event !== "Interrupt" && !synchronous.has(event) ? { async: true } : {}
       }
     ]
   };
