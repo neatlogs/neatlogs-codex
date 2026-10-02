@@ -1,0 +1,149 @@
+name: Weekly npm release
+
+on:
+  schedule:
+    - cron: '21 10 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: weekly-npm-release-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+        if: github.repository == 'neatlogs/neatlogs-wizard'
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+
+      - name: Use npm with trusted publishing support
+        run: npm install --global npm@11
+
+      - name: Decide whether a release is due
+        id: plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/weekly-release.mjs --apply > "$RUNNER_TEMP/weekly-release-plan.json"
+          cat "$RUNNER_TEMP/weekly-release-plan.json"
+          echo "action=$(jq -r .action "$RUNNER_TEMP/weekly-release-plan.json")" >> "$GITHUB_OUTPUT"
+          echo "version=$(jq -r .version "$RUNNER_TEMP/weekly-release-plan.json")" >> "$GITHUB_OUTPUT"
+          echo "bump=$(jq -r '.bump // false' "$RUNNER_TEMP/weekly-release-plan.json")" >> "$GITHUB_OUTPUT"
+          echo "commit=$(jq -r '.commit // false' "$RUNNER_TEMP/weekly-release-plan.json")" >> "$GITHUB_OUTPUT"
+
+      - name: Build and validate the exact package to publish
+        if: steps.plan.outputs.action == 'publish'
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$GITHUB_REPOSITORY" in
+            neatlogs/neatlogs-typescript)
+              npm ci --ignore-scripts --no-audit --no-fund
+              npm run lint
+              npm test
+              npm pack --dry-run
+              ;;
+            neatlogs/neatlogs-wizard)
+              pnpm install --frozen-lockfile
+              pnpm typecheck
+              pnpm test
+              pnpm build
+              pnpm pack --pack-destination "$RUNNER_TEMP"
+              ;;
+            neatlogs/neatlogs-claude-code)
+              npm ci --ignore-scripts --no-audit --no-fund
+              npm run build
+              node -e "const p=require('./package.json');const m=require('./.claude-plugin/plugin.json');if(p.version!==m.version)process.exit(1)"
+              npm pack --dry-run
+              ;;
+            neatlogs/neatlogs-codex)
+              npm ci --ignore-scripts --no-audit --no-fund
+              npm run typecheck
+              npm test
+              npm pack --dry-run
+              ;;
+            *) echo "Unsupported repository: $GITHUB_REPOSITORY" >&2; exit 1 ;;
+          esac
+
+      - name: Commit synchronized version and tag the release
+        if: steps.plan.outputs.action == 'publish'
+        shell: bash
+        env:
+          RELEASE_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ steps.plan.outputs.version }}
+          RELEASE_COMMIT: ${{ steps.plan.outputs.commit }}
+        run: |
+          set -euo pipefail
+          git config user.name 'neatlogs-release[bot]'
+          git config user.email 'neatlogs-release[bot]@users.noreply.github.com'
+          git remote set-url origin "https://x-access-token:${RELEASE_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if [[ "$RELEASE_COMMIT" == 'true' ]]; then
+            case "$GITHUB_REPOSITORY" in
+              neatlogs/neatlogs-typescript) git add package.json package-lock.json src/version.ts ;;
+              neatlogs/neatlogs-wizard) git add package.json pnpm-lock.yaml ;;
+              neatlogs/neatlogs-claude-code) git add package.json package-lock.json .claude-plugin/plugin.json ;;
+              neatlogs/neatlogs-codex) git add package.json package-lock.json .codex-plugin/plugin.json README.md ;;
+            esac
+            git diff --cached --check
+            git commit -m "chore(release): ${RELEASE_VERSION}"
+            # A concurrent merge makes this fast-forward push fail. In that case
+            # the job stops before tagging or publishing a different source tree.
+            git push origin HEAD:refs/heads/main
+          fi
+          # The published artifact must come from the exact tagged source tree.
+          git diff --exit-code
+          tag="v${RELEASE_VERSION}"
+          if git rev-parse --verify "refs/tags/${tag}^{commit}" >/dev/null 2>&1; then
+            test "$(git rev-list -n 1 "$tag")" = "$(git rev-parse HEAD)" || {
+              echo "Existing ${tag} points to another commit" >&2
+              exit 1
+            }
+          else
+            git tag -a "$tag" -m "Release ${RELEASE_VERSION}"
+          fi
+          git push origin "refs/tags/${tag}"
+
+      - name: Publish through npm trusted publishing
+        if: steps.plan.outputs.action == 'publish'
+        # A version commit created inside this run changes HEAD after the
+        # workflow's GITHUB_SHA was set. Avoid an incorrect source attestation.
+        env:
+          NPM_CONFIG_PROVENANCE: 'false'
+        run: npm publish --access public
+
+      - name: Verify the published version
+        if: steps.plan.outputs.action == 'publish'
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          package_name=$(node -p "require('./package.json').name")
+          for attempt in 1 2 3 4 5 6; do
+            published=$(npm view "${package_name}@${RELEASE_VERSION}" version 2>/dev/null || true)
+            if [[ "$published" == "$RELEASE_VERSION" ]]; then
+              echo "Published ${package_name}@${RELEASE_VERSION}"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "npm did not report ${package_name}@${RELEASE_VERSION} after publication" >&2
+          exit 1
