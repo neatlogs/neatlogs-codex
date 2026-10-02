@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
+import { isolatedCode } from './isolation.mjs';
 
 export const root = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const lockPath = join(root, '.compatibility/codex-cli.lock.json');
@@ -228,9 +229,15 @@ export async function validateProposal(report, proposal, fixtureDir, trustedProb
   const childHome = join(fixtureDir, 'child-home');
   await mkdir(childHome, { recursive: true, mode: 0o777 });
   await chmod(childHome, 0o777);
-  const validationEnv = { PATH: process.env.PATH, HOME: childHome, CI: 'true' };
+  const validationEnv = { PATH: process.env.PATH, HOME: childHome, TMPDIR: childHome, CI: 'true' };
   const build = await run('npm', ['run', 'build'], { timeout: 120_000, env: validationEnv });
   if (build.code !== 0) return reject(`npm run build failed: ${build.output.slice(-500)}`);
+  const codeDirectory = await isolatedCode(true);
+  try {
+    if (process.env.COMPAT_UNPRIVILEGED === 'true') {
+      const access = await run('sudo', ['-n', '-u', 'nobody', '--', 'test', '!', '-w', codeDirectory]);
+      if (access.code !== 0) return reject('Unprivileged validation user can alter the copied source or build');
+    }
   for (const args of [
     ['node_modules/typescript/bin/tsc', '--noEmit'],
     ['node_modules/vitest/vitest.mjs', 'run'],
@@ -238,9 +245,9 @@ export async function validateProposal(report, proposal, fixtureDir, trustedProb
     const unprivileged = process.env.COMPAT_UNPRIVILEGED === 'true';
     const result = unprivileged
       ? await run('sudo', ['-n', '-u', 'nobody', '--', 'env', '-i',
-        `PATH=${process.env.PATH}`, `HOME=${childHome}`, 'CI=true',
-        process.execPath, ...args], { timeout: 120_000, env: { PATH: process.env.PATH } })
-      : await run(process.execPath, args, { timeout: 120_000, env: validationEnv });
+        `PATH=${process.env.PATH}`, `HOME=${childHome}`, `TMPDIR=${childHome}`, 'CI=true',
+        process.execPath, ...args], { cwd: codeDirectory, timeout: 120_000, env: { PATH: process.env.PATH } })
+      : await run(process.execPath, args, { cwd: codeDirectory, timeout: 120_000, env: validationEnv });
     if (result.code !== 0) return reject(`${args.join(' ')} failed: ${result.output.slice(-500)}`);
     await verifyIntegrity();
   }
@@ -248,13 +255,16 @@ export async function validateProposal(report, proposal, fixtureDir, trustedProb
     ...validationEnv,
     COMPAT_UNPRIVILEGED: process.env.COMPAT_UNPRIVILEGED === 'true' ? 'true' : 'false',
   };
-  const cliPath = join(root, 'dist/cli.js');
+  const cliPath = join(codeDirectory, 'dist/cli.js');
   const baselineReplay = await run(process.execPath, [trustedProbePath, report.baseline.hookLog, cliPath], { env: probeEnv });
   if (baselineReplay.code !== 0) return reject('Recorded baseline hook replay regressed after the patch');
   const latestReplay = await run(process.execPath, [trustedProbePath, report.latest.hookLog, cliPath], { env: probeEnv });
   if (latestReplay.code !== 0) return reject('Captured latest hook payloads still fail after the patch');
   await verifyIntegrity();
   return { status: 'validated', reason: 'Typecheck, tests, build, and baseline/latest captured hook replay through packaged handler and local OTLP sink passed' };
+  } finally {
+    await rm(codeDirectory, { recursive: true, force: true });
+  }
 }
 
 async function main() {

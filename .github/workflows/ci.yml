@@ -24,10 +24,10 @@ jobs:
       - run: npm run typecheck
       - run: npm run build
       - name: Check isolated replay can load the packaged CLI
-        run: |
-          sudo -n -u nobody -- test ! -w "$GITHUB_WORKSPACE"
-          sudo -n -u nobody -- test -r "$GITHUB_WORKSPACE/dist/cli.js"
-          sudo -n -u nobody -- test -r "$GITHUB_WORKSPACE/node_modules/protobufjs/package.json"
-          sudo -n -u nobody -- node "$GITHUB_WORKSPACE/dist/cli.js" --help
+        run: node scripts/compatibility/isolation.check.mjs
+      - name: Exercise synthetic candidate through isolated red-green gate
+        env:
+          COMPAT_UNPRIVILEGED: "true"
+        run: node scripts/compatibility/validation.check.mjs
       - run: npm test
       - run: node --test scripts/compatibility/monitor.check.mjs

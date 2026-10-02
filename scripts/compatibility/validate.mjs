@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { root, validateProposal } from './monitor.mjs';
+import { isolatedCode } from './isolation.mjs';
 
 if (process.env.GITHUB_ACTIONS === 'true' && process.env.COMPAT_UNPRIVILEGED !== 'true') {
   throw new Error('Hosted generated-patch validation requires unprivileged execution');
@@ -27,15 +28,9 @@ async function run(file, args, env = {}) {
 const reportPath = join(root, 'compatibility-report.json');
 const report = JSON.parse(await readFile(reportPath, 'utf8'));
 if (process.env.COMPAT_UNPRIVILEGED === 'true') {
+  await chmod(root, 0o755);
   const protectedWorkspace = await run('sudo', ['-n', '-u', 'nobody', '--', 'test', '!', '-w', root]);
   if (protectedWorkspace.code !== 0) throw new Error('Unprivileged validation user can write the workspace');
-  for (const path of [join(root, 'dist/cli.js'), join(root, 'node_modules/protobufjs/package.json')]) {
-    const readable = await run('sudo', ['-n', '-u', 'nobody', '--', 'test', '-r', path]);
-    if (readable.code !== 0) throw new Error(`Unprivileged validation user cannot read ${path}; check workspace directory traversal permissions`);
-  }
-  const cliLoad = await run('sudo', ['-n', '-u', 'nobody', '--', 'env', '-i',
-    `PATH=${process.env.PATH}`, `HOME=${tmpdir()}`, process.execPath, join(root, 'dist/cli.js'), '--help']);
-  if (cliLoad.code !== 0) throw new Error(`Unprivileged validation user cannot load packaged CLI: ${cliLoad.output.slice(-500)}`);
 }
 const commit = await run('git', ['rev-parse', 'HEAD']);
 if (commit.code !== 0 || commit.output.trim() !== report.baseCommit) {
@@ -69,9 +64,16 @@ if (report.proposal?.status === 'pending-validation') {
       }
     }
     const probeEnv = { COMPAT_UNPRIVILEGED: process.env.COMPAT_UNPRIVILEGED === 'true' ? 'true' : 'false' };
-    const cli = join(root, 'dist/cli.js');
-    const baseline = await run(process.execPath, [trustedProbe, baselineFixture, cli], probeEnv);
-    const latest = await run(process.execPath, [trustedProbe, latestFixture, cli], probeEnv);
+    const baseCode = await isolatedCode();
+    let baseline;
+    let latest;
+    try {
+      const cli = join(baseCode, 'dist/cli.js');
+      baseline = await run(process.execPath, [trustedProbe, baselineFixture, cli], probeEnv);
+      latest = await run(process.execPath, [trustedProbe, latestFixture, cli], probeEnv);
+    } finally {
+      await rm(baseCode, { recursive: true, force: true });
+    }
     await verifyIntegrity();
     if (baseline.code !== 0) {
       report.proposal = { status: 'rejected', reason: 'Captured baseline does not pass in secretless replay' };
