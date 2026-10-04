@@ -97,7 +97,17 @@ async function plan() {
   if (comparison < 0) throw new Error(`source ${current} is behind npm ${published.version}`);
   if (comparison > 0) {
     if (published.versions[current]) throw new Error(`${current} is already published under another npm dist-tag`);
-    return { action: 'publish', version: current, published: published.version, bump: false };
+    const retryTag = `v${current}`;
+    const tagged = spawnSync('git', ['rev-parse', '--verify', `refs/tags/${retryTag}^{commit}`], {
+      cwd: root, encoding: 'utf8',
+    });
+    if (tagged.status === 0) {
+      command('git', ['merge-base', '--is-ancestor', tagged.stdout.trim(), 'HEAD']);
+    }
+    return {
+      action: 'publish', version: current, published: published.version,
+      bump: false, retry_tag: tagged.status === 0 ? retryTag : '',
+    };
   }
 
   const source = baseline(current, published.publishedAt);
@@ -122,6 +132,11 @@ async function main() {
     throw new Error('usage: node scripts/weekly-release.mjs [--apply]');
   }
   const result = await plan();
+  // A failed upload is retried from its exact tag even if main has since moved.
+  if (result.retry_tag) {
+    console.log(JSON.stringify(result));
+    return;
+  }
   if (apply && result.action === 'publish') {
     if (result.bump) command('npm', ['version', result.version, '--no-git-tag-version', '--ignore-scripts']);
     if (configuration.lockCommand) command(configuration.lockCommand[0], configuration.lockCommand.slice(1));

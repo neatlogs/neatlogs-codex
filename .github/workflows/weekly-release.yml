@@ -68,6 +68,13 @@ jobs:
           echo "version=$(jq -r .version "$RUNNER_TEMP/weekly-release-plan.json")" >> "$GITHUB_OUTPUT"
           echo "bump=$(jq -r '.bump // false' "$RUNNER_TEMP/weekly-release-plan.json")" >> "$GITHUB_OUTPUT"
           echo "commit=$(jq -r '.commit // false' "$RUNNER_TEMP/weekly-release-plan.json")" >> "$GITHUB_OUTPUT"
+          echo "retry_tag=$(jq -r '.retry_tag // empty' "$RUNNER_TEMP/weekly-release-plan.json")" >> "$GITHUB_OUTPUT"
+
+      - name: Restore exact source of an unpublished tagged release
+        if: steps.plan.outputs.retry_tag != ''
+        env:
+          RETRY_TAG: ${{ steps.plan.outputs.retry_tag }}
+        run: git checkout --detach "$RETRY_TAG"
 
       - name: Build and validate the exact package to publish
         if: steps.plan.outputs.action == 'publish'
