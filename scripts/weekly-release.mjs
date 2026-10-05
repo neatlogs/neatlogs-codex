@@ -89,6 +89,16 @@ function baseline(version, publishedAt) {
   return { commit, description: `mainline before ${publishedAt}`, verified: false };
 }
 
+function packageMetadataChanged(sourceCommit) {
+  const previous = JSON.parse(git('show', `${sourceCommit}:package.json`));
+  const current = { ...packageJson };
+  // The repository URL helps registry attribution, but changing it alone does
+  // not change the installable package. Include it in the next functional release.
+  delete previous.repository;
+  delete current.repository;
+  return JSON.stringify(previous) !== JSON.stringify(current);
+}
+
 async function plan() {
   const current = packageJson.version;
   const currentParts = parseVersion(current, 'package.json version');
@@ -111,11 +121,12 @@ async function plan() {
   }
 
   const source = baseline(current, published.publishedAt);
-  const diff = spawnSync('git', ['diff', '--quiet', source.commit, 'HEAD', '--', ...releasePaths], {
+  const otherPaths = releasePaths.filter((path) => path !== 'package.json');
+  const diff = spawnSync('git', ['diff', '--quiet', source.commit, 'HEAD', '--', ...otherPaths], {
     cwd: root, encoding: 'utf8',
   });
   if (![0, 1].includes(diff.status)) throw new Error(diff.stderr || 'git diff failed');
-  if (diff.status === 0) {
+  if (diff.status === 0 && !packageMetadataChanged(source.commit)) {
     return { action: 'skip', version: current, published: published.version, baseline: source.description };
   }
   const next = `${currentParts[0]}.${currentParts[1]}.${currentParts[2] + 1}`;
