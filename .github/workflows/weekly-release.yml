@@ -168,17 +168,26 @@ jobs:
         run: |
           set -euo pipefail
           package_name=$(node -p "require('./package.json').name")
-          for attempt in 1 2 3 4 5 6; do
-            published=$(npm view "${package_name}@${RELEASE_VERSION}" version 2>/dev/null || true)
+          deadline=$((SECONDS + 600))
+          attempt=0
+          while :; do
+            attempt=$((attempt + 1))
+            # npm publish can return before the public registry exposes the package.
+            published=$(npm view "${package_name}@${RELEASE_VERSION}" version \
+              --registry=https://registry.npmjs.org/ --prefer-online \
+              --fetch-retries=0 --fetch-timeout=15000 \
+              --cache "$RUNNER_TEMP/npm-release-verify-cache" 2>/dev/null || true)
             if [[ "$published" == "$RELEASE_VERSION" ]]; then
               echo "Published ${package_name}@${RELEASE_VERSION}"
               echo "version=${RELEASE_VERSION}" >> "$GITHUB_OUTPUT"
               echo "package_name=${package_name}" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            sleep 10
+            if (( SECONDS >= deadline )); then break; fi
+            echo "npm has not confirmed ${package_name}@${RELEASE_VERSION} (check ${attempt}); retrying in 15 seconds"
+            sleep 15
           done
-          echo "npm did not report ${package_name}@${RELEASE_VERSION} after publication" >&2
+          echo "::error::npm publish succeeded, but the registry did not confirm exact version ${package_name}@${RELEASE_VERSION} within 10 minutes; inspect the package before retrying" >&2
           exit 1
 
   notify:
