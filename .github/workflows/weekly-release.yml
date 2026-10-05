@@ -1,9 +1,9 @@
-name: Weekly npm release
+name: Daily npm release
 
 on:
   pull_request:
   schedule:
-    - cron: '21 10 * * 1'
+    - cron: '21 10 * * *'
   workflow_dispatch:
 
 permissions:
@@ -38,6 +38,9 @@ jobs:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    outputs:
+      published_version: ${{ steps.verify.outputs.version }}
+      package_name: ${{ steps.verify.outputs.package_name }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -157,6 +160,7 @@ jobs:
         run: npm publish --access public
 
       - name: Verify the published version
+        id: verify
         if: steps.plan.outputs.action == 'publish'
         shell: bash
         env:
@@ -164,13 +168,57 @@ jobs:
         run: |
           set -euo pipefail
           package_name=$(node -p "require('./package.json').name")
-          for attempt in 1 2 3 4 5 6; do
-            published=$(npm view "${package_name}@${RELEASE_VERSION}" version 2>/dev/null || true)
+          deadline=$((SECONDS + 600))
+          attempt=0
+          while :; do
+            attempt=$((attempt + 1))
+            # npm publish can return before the public registry exposes the package.
+            published=$(npm view "${package_name}@${RELEASE_VERSION}" version \
+              --registry=https://registry.npmjs.org/ --prefer-online \
+              --fetch-retries=0 --fetch-timeout=15000 \
+              --cache "$RUNNER_TEMP/npm-release-verify-cache" 2>/dev/null || true)
             if [[ "$published" == "$RELEASE_VERSION" ]]; then
               echo "Published ${package_name}@${RELEASE_VERSION}"
+              echo "version=${RELEASE_VERSION}" >> "$GITHUB_OUTPUT"
+              echo "package_name=${package_name}" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            sleep 10
+            if (( SECONDS >= deadline )); then break; fi
+            echo "npm has not confirmed ${package_name}@${RELEASE_VERSION} (check ${attempt}); retrying in 15 seconds"
+            sleep 15
           done
-          echo "npm did not report ${package_name}@${RELEASE_VERSION} after publication" >&2
+          echo "::error::npm publish succeeded, but the registry did not confirm exact version ${package_name}@${RELEASE_VERSION} within 10 minutes; inspect the package before retrying" >&2
           exit 1
+
+  notify:
+    name: Notify Slack of published release
+    needs: release
+    if: needs.release.outputs.published_version != ''
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Send publication notice to Slack
+        shell: bash
+        env:
+          COMPAT_SLACK_WEBHOOK_URL: ${{ secrets.COMPAT_SLACK_WEBHOOK_URL }}
+          PACKAGE_NAME: ${{ needs.release.outputs.package_name }}
+          RELEASE_VERSION: ${{ needs.release.outputs.published_version }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$COMPAT_SLACK_WEBHOOK_URL" ]]; then
+            echo '::error::Package was published, but COMPAT_SLACK_WEBHOOK_URL is not configured'
+            exit 1
+          fi
+          text=":white_check_mark: *${PACKAGE_NAME} ${RELEASE_VERSION} published* · <https://www.npmjs.com/package/${PACKAGE_NAME}/v/${RELEASE_VERSION}|npm package> · <https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}|workflow run>"
+          jq -n --arg text "$text" '{text: $text}' > "$RUNNER_TEMP/release-slack-payload.json"
+          if ! response=$(curl --fail --silent --show-error --retry 3 --max-time 15 \
+            --header 'Content-Type: application/json' \
+            --data-binary @"$RUNNER_TEMP/release-slack-payload.json" \
+            "$COMPAT_SLACK_WEBHOOK_URL"); then
+            echo '::error::Package was published, but Slack delivery failed'
+            exit 1
+          fi
+          if [[ "$response" != 'ok' ]]; then
+            echo '::error::Package was published, but Slack did not confirm the notification'
+            exit 1
+          fi
