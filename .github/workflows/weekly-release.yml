@@ -1,9 +1,9 @@
-name: Weekly npm release
+name: Daily npm release
 
 on:
   pull_request:
   schedule:
-    - cron: '21 10 * * 1'
+    - cron: '21 10 * * *'
   workflow_dispatch:
 
 permissions:

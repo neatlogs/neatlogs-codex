@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Decide whether the weekly job should publish or bump a patch release. */
+/** Decide whether the daily job should publish or bump a patch release. */
 import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -168,6 +168,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(`weekly release failed: ${error.message}`);
+  console.error(`daily release failed: ${error.message}`);
   process.exitCode = 1;
 });
