@@ -200,13 +200,14 @@ jobs:
       - name: Send publication notice to Slack
         shell: bash
         env:
-          COMPAT_SLACK_WEBHOOK_URL: ${{ secrets.COMPAT_SLACK_WEBHOOK_URL }}
+          # Incoming webhooks are channel-bound; configure this one for #released-artifacts (C0C6P2PU1UN).
+          RELEASE_SLACK_WEBHOOK_URL: ${{ secrets.RELEASE_SLACK_WEBHOOK_URL }}
           PACKAGE_NAME: ${{ needs.release.outputs.package_name }}
           RELEASE_VERSION: ${{ needs.release.outputs.published_version }}
         run: |
           set -euo pipefail
-          if [[ -z "$COMPAT_SLACK_WEBHOOK_URL" ]]; then
-            echo '::error::Package was published, but COMPAT_SLACK_WEBHOOK_URL is not configured'
+          if [[ -z "$RELEASE_SLACK_WEBHOOK_URL" ]]; then
+            echo '::error::Package was published, but RELEASE_SLACK_WEBHOOK_URL is not configured'
             exit 1
           fi
           text=":white_check_mark: *${PACKAGE_NAME} ${RELEASE_VERSION} published* · <https://www.npmjs.com/package/${PACKAGE_NAME}/v/${RELEASE_VERSION}|npm package> · <https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}|workflow run>"
@@ -214,7 +215,7 @@ jobs:
           if ! response=$(curl --fail --silent --show-error --retry 3 --max-time 15 \
             --header 'Content-Type: application/json' \
             --data-binary @"$RUNNER_TEMP/release-slack-payload.json" \
-            "$COMPAT_SLACK_WEBHOOK_URL"); then
+            "$RELEASE_SLACK_WEBHOOK_URL"); then
             echo '::error::Package was published, but Slack delivery failed'
             exit 1
           fi
