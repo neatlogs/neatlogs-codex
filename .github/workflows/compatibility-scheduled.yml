@@ -1,0 +1,191 @@
+name: Codex CLI compatibility
+
+on:
+  schedule:
+    - cron: "37 */12 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run discovery and checks without creating issues, PRs, or Slack messages"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codex-cli-compatibility
+  cancel-in-progress: false
+
+jobs:
+  branch-dry-run:
+    if: github.event_name == 'workflow_dispatch' && github.ref_name != github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - name: Discover CLI version with no provider credentials
+        run: node scripts/compatibility/monitor.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: codex-cli-compatibility-branch-dry-run
+          path: compatibility-report.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  capture:
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - name: Compare published Codex CLI with recorded baseline
+        id: capture
+        continue-on-error: true
+        env:
+          COMPAT_OPENAI_API_KEY: ${{ secrets.COMPAT_OPENAI_API_KEY }}
+        run: node scripts/compatibility/monitor.mjs
+      - name: Upload sanitized Codex canary evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-cli-compatibility-capture
+          path: |
+            compatibility-report.json
+            compatibility-fixtures/*.jsonl
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Fail if discovery or checks crashed
+        if: steps.capture.outcome == 'failure'
+        run: exit 1
+
+  propose:
+    needs: capture
+    if: needs.capture.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: codex-cli-compatibility-capture
+      - name: Ask Gemini for a bounded fix only for a candidate regression
+        env:
+          COMPAT_GEMINI_API_KEY: ${{ secrets.COMPAT_GEMINI_API_KEY }}
+          COMPAT_GEMINI_MODEL: ${{ vars.COMPAT_GEMINI_MODEL || 'gemini-2.5-flash' }}
+        run: node scripts/compatibility/propose.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: codex-cli-compatibility-proposal
+          path: compatibility-report.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  validate:
+    needs: propose
+    if: needs.propose.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - uses: actions/download-artifact@v4
+        with:
+          name: codex-cli-compatibility-capture
+      - uses: actions/download-artifact@v4
+        with:
+          name: codex-cli-compatibility-proposal
+      - name: Validate proposed source in a secretless runner
+        env:
+          COMPAT_UNPRIVILEGED: "true"
+        run: node scripts/compatibility/validate.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: codex-cli-compatibility-validation
+          path: |
+            compatibility-report.json
+            compatibility-proposal.patch
+            dist/cli.js
+            dist/index.js
+            dist/index.d.ts
+            dist/compatibility-probe.js
+          if-no-files-found: ignore
+          retention-days: 14
+
+  publish:
+    needs: [capture, propose, validate]
+    if: always() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false && github.ref_name == github.event.repository.default_branch))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Download captured result
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: codex-cli-compatibility-capture
+      - name: Download Gemini outcome
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: codex-cli-compatibility-proposal
+      - name: Download secretless validation outcome and build
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: codex-cli-compatibility-validation
+      - name: Publish review issue, validated fix PR, and Slack outcome
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMPAT_SLACK_WEBHOOK_URL: ${{ secrets.COMPAT_SLACK_WEBHOOK_URL }}
+          GITHUB_EVENT_REPOSITORY_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: node scripts/compatibility/publish.mjs

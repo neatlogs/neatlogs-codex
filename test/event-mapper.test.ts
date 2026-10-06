@@ -46,6 +46,15 @@ describe("mapHookEvent", () => {
     };
   }
 
+  it("closes an interrupted turn once and labels it for review", () => {
+    mapHookEvent(payload("UserPromptSubmit", { prompt: "Work in progress" }), config, state, 1_000);
+    const interrupted = mapHookEvent(payload("Interrupt"), config, state, 1_500);
+    expect(interrupted.spans).toHaveLength(2);
+    expect(attribute(interrupted.spans[0], "neatlogs.workflow.turn_status")).toBe("interrupted");
+    const sessionEnd = mapHookEvent(payload("SessionEnd"), config, state, 1_600);
+    expect(sessionEnd.spans.map((span) => span.name)).toEqual(["session_end"]);
+  });
+
   it("creates deterministic tool spans with measured duration and redaction", () => {
     mapHookEvent(payload("UserPromptSubmit", { prompt: "Fix the failing test" }), config, state, 1_000);
     mapHookEvent(
