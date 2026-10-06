@@ -2,7 +2,7 @@
 
 Automatic Neatlogs observability for Codex sessions through lifecycle hooks.
 
-Current release: `0.1.0`
+Current release: `0.1.1`
 
 ## Install
 

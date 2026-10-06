@@ -1,6 +1,6 @@
 {
   "name": "neatlogs-codex",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Automatic Neatlogs observability for Codex sessions through lifecycle hooks.",
   "author": {
     "name": "Neatlogs"
